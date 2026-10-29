@@ -2,3 +2,5 @@ scapy
 python-nmap
 numpy
 scikit-learn
+fastapi
+uvicorn

@@ -33,6 +33,32 @@ class TrafficAnalyzer:
 
             return self.extract_flow_info(packet, stat)
 
+    def get_flow_summary(self, limit=50):
+        with self.lock:
+            flows = [
+                (flow_key, dict(stat))
+                for flow_key, stat in self.flow_stats.items()
+            ]
+
+        flows.sort(key=lambda flow: flow[1]['packet_count'], reverse=True)
+        return [
+            {
+                'source_ip': flow_key[0],
+                'source_port': flow_key[1],
+                'destination_ip': flow_key[2],
+                'destination_port': flow_key[3],
+                'packet_count': stat['packet_count'],
+                'byte_count': stat['byte_count'],
+                'start_time': float(stat['start_time'] or 0),
+                'end_time': float(stat['end_time'] or 0),
+            }
+            for flow_key, stat in flows[:limit]
+        ]
+
+    def flow_count(self):
+        with self.lock:
+            return len(self.flow_stats)
+
     def extract_flow_info(self, packet, stat):
         flow_duration = max(stat['end_time'] - stat['start_time'], 1e-6)
         return {
