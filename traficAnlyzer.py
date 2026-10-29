@@ -1,5 +1,6 @@
 from collections import defaultdict
 from scapy.all import sniff,IP, TCP
+from threading import Lock
 
 class TrafficAnalyzer:
     def __init__(self):
@@ -10,6 +11,7 @@ class TrafficAnalyzer:
             'start_time': None,
             'end_time': None
         })
+        self.lock = Lock()
 
     def analyze_traffic(self,packet):
         if IP in packet and TCP in packet:
@@ -20,13 +22,14 @@ class TrafficAnalyzer:
 
             flow_key = (ip_src, port_src, ip_dst, port_dst)
 
-            stat = self.flow_stats[flow_key]
-            stat['packet_count'] += 1
-            stat['byte_count'] += len(packet)
-            current_time = packet.time
-            if not stat['start_time']:
-                stat['start_time'] = current_time
-            stat['end_time'] = current_time
+            with self.lock:
+                stat = self.flow_stats[flow_key]
+                stat['packet_count'] += 1
+                stat['byte_count'] += len(packet)
+                current_time = packet.time
+                if not stat['start_time']:
+                    stat['start_time'] = current_time
+                stat['end_time'] = current_time
 
             return self.extract_flow_info(packet, stat)
 

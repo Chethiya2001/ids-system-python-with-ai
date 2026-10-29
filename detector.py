@@ -33,9 +33,16 @@ class DetectorEngine:
         self.training_data = training_data
         self.is_anomaly_detector_trained = True
 
-    def detect_threats(self,features):
+    @staticmethod
+    def _feature_vector(features):
+        return [
+            features['packet_size'],
+            features['packet_rate'],
+            features['byte_rate'],
+        ]
+
+    def _detect_signature_threats(self, features):
         threats = []
-        #Signature-based detection
         for rule_name , rule in self.signature_rule.items():
             if rule['condition'](features):
                 threats.append(
@@ -45,22 +52,54 @@ class DetectorEngine:
                         'confidence': 1.0
                     }
                 )
-        #Anomaly-based detection
-        feature_vector = np.array([
-            features['packet_size'],  
-            features['packet_rate'],
-            features['byte_rate'],
-        ]).reshape(1, -1)
+        return threats
+
+    @staticmethod
+    def _anomaly_threat(anomaly_score):
+        if anomaly_score >= -0.5:
+            return None
+
+        return {
+            'type': 'anomaly',
+            'rule': 'ANOMALY_DETECTED',
+            'confidence': min(1.0, abs(anomaly_score))
+        }
+
+    def detect_threats(self, features):
+        threats = self._detect_signature_threats(features)
         if self.is_anomaly_detector_trained:
-            anomaly_score = self.anomaly_detector.decision_function(feature_vector)[0]
-            if anomaly_score < -0.5:
-                threats.append(
-                    {
-                        'type': 'anomaly',
-                        'rule': 'ANOMALY_DETECTED',
-                        'confidence': min(1.0, abs(anomaly_score))
-                    }
-                )
+            feature_vector = np.asarray(
+                [self._feature_vector(features)], dtype=float
+            )
+            anomaly_score = self.anomaly_detector.decision_function(
+                feature_vector
+            )[0]
+            anomaly_threat = self._anomaly_threat(anomaly_score)
+            if anomaly_threat is not None:
+                threats.append(anomaly_threat)
 
         return threats
 
+    def detect_threats_batch(self, feature_batch):
+        feature_batch = list(feature_batch)
+        if not feature_batch:
+            return []
+
+        threats_batch = [
+            self._detect_signature_threats(features)
+            for features in feature_batch
+        ]
+        if not self.is_anomaly_detector_trained:
+            return threats_batch
+
+        feature_vectors = np.asarray(
+            [self._feature_vector(features) for features in feature_batch],
+            dtype=float
+        )
+        anomaly_scores = self.anomaly_detector.decision_function(feature_vectors)
+        for threats, anomaly_score in zip(threats_batch, anomaly_scores):
+            anomaly_threat = self._anomaly_threat(anomaly_score)
+            if anomaly_threat is not None:
+                threats.append(anomaly_threat)
+
+        return threats_batch
