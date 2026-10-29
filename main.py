@@ -7,7 +7,7 @@ from scapy.all import sniff,IP, TCP
 
 
 class IntrusionDetectionSystem:
-    def __init__(self, interface="eth0"):
+    def __init__(self, interface=None):
         self.packet_capture = PacketCapture()
         self.traffic_analyzer = TrafficAnalyzer()
         self.detection_engine = DetectorEngine()
@@ -16,11 +16,23 @@ class IntrusionDetectionSystem:
         self.interface = interface
 
     def start(self):
-        print(f"Starting IDS on interface {self.interface}")
-        self.packet_capture.start_capture(self.interface)
+        interface_name = self.interface or "all available interfaces"
+        print(f"Starting IDS on {interface_name}")
+        try:
+            self.packet_capture.start_capture(self.interface)
+        except RuntimeError as error:
+            print(f"Unable to start packet capture: {error}")
+            return
 
         while True:
             try:
+                if self.packet_capture.capture_error is not None:
+                    print(
+                        f"Packet capture stopped: "
+                        f"{self.packet_capture.capture_error}"
+                    )
+                    break
+
                 packet = self.packet_capture.packet_queue.get(timeout=1)
                 features = self.traffic_analyzer.analyze_traffic(packet)
 
